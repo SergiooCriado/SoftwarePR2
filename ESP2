@@ -1,0 +1,60 @@
+#include <WiFi.h>
+#include <PubSubClient.h>
+#include <ArduinoJson.h>
+
+#define MQTT_SERVER_IP      "mqtt.dsic.upv.es"
+#define MQTT_SERVER_PORT    1883
+#define MQTT_USERNAME       "giirob"
+#define MQTT_PASSWORD       "UPV2024"
+
+#define PIN_TEMP_ANALOG 4
+#define PIN_HUM_ANALOG  5
+#define PIN_CO2         1 
+#define PIN_O2          2 
+
+const char* ssid = "TU_WIFI_NOMBRE";
+const char* password = "TU_WIFI_PASSWORD";
+
+WiFiClient espClient;
+PubSubClient client(espClient);
+
+void setup() {
+  Serial.begin(115200);
+  setup_wifi();
+  client.setServer(MQTT_SERVER_IP, MQTT_SERVER_PORT);
+}
+
+void setup_wifi() {
+  WiFi.begin(ssid, password);
+  while (WiFi.status() != WL_CONNECTED) { delay(500); }
+}
+
+void reconnect() {
+  while (!client.connected()) {
+    if (client.connect("ESP32_Ambiente_S1", MQTT_USERNAME, MQTT_PASSWORD)) {
+      Serial.println("ESP1 Conectada");
+    } else { delay(5000); }
+  }
+}
+
+void loop() {
+  if (!client.connected()) reconnect();
+  client.loop();
+
+  float t = analogRead(PIN_TEMP_ANALOG) * (100.0 / 4095.0);
+  float h = analogRead(PIN_HUM_ANALOG) * (100.0 / 4095.0);
+  int valorCO2 = analogRead(PIN_CO2); 
+  float valorO2 = analogRead(PIN_O2) * (25.0 / 4095.0);
+
+  StaticJsonDocument<256> doc;
+  doc["co2"] = valorCO2;
+  doc["o2"] = valorO2;
+  doc["temperatura"] = t;
+  doc["humedad"] = h;
+
+  char buffer[256];
+  serializeJson(doc, buffer);
+  client.publish("incubadora/esp1", buffer);
+  
+  delay(2000);
+}
